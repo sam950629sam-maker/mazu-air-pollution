@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>媽祖遶境環境污染分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px; background-color: #f4f4f4; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { color: #d32f2f; text-align: center; }
+        .chart-container { position: relative; height: 400px; width: 100%; margin-top: 30px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>大甲媽遶境：空氣污染衝擊分析</h1>
+    <p>本網站旨在透過數據視覺化，探討大型宗教活動期間對 PM2.5 濃度的影響。</p>
+
+    <div class="chart-container">
+        <canvas id="impactChart"></canvas>
+    </div>
+</div>
+
+<script>
+    // 這裡放入你的分析數據（根據你提供的摘要資料）
+    const ctx = document.getElementById('impactChart').getContext('2d');
+    const impactChart = new Chart(ctx, {
+        type: 'bar', // 建議使用的長條圖
+        data: {
+            labels: ['遶境前 (4/1-4/3)', '遶境期間 (4/4-4/13)', '遶境後 (4/14-4/16)'],
+            datasets: [{
+                label: '平均 PM2.5 濃度 (μg/m³)',
+                data: [24, 33, 26], // 填入分析結果
+                backgroundColor: [
+                    'rgba(75, 192, 192, 0.6)', // 冷色
+                    'rgba(255, 99, 132, 0.8)', // 警告暖色
+                    'rgba(54, 162, 235, 0.6)'  // 冷色
+                ],
+                borderColor: [
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, title: { display: true, text: 'μg/m³' } }
+            },
+            plugins: {
+                title: { display: true, text: '活動階段污染比較' }
+            }
+        }
+    });
+</script>
+
+</body>
+</html>
