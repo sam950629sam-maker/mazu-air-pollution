@@ -85,65 +85,78 @@
 </footer>
 
 <script>
-    // 配置參數
+    // 1. 配置參數：列出所有月份與目標
     const DATA_CONFIG = {
-        pollutionFile: '空氣品質監測月值 (2025-04).csv',
+        months: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'],
         targetSite: '大甲',
         targetItem: '細懸浮微粒'
     };
 
     async function initDashboard() {
-        try {
-            // 1. 讀取並解析 CSV 數據
-            const response = await fetch(DATA_CONFIG.pollutionFile);
-            const csvText = await response.text();
-            
-            Papa.parse(csvText, {
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    const filtered = results.data.filter(row => 
-                        row.sitename === DATA_CONFIG.targetSite && 
-                        (row.itemname === DATA_CONFIG.targetItem || row.itemengname === 'PM2.5')
-                    );
+        let yearlyLabels = [];
+        let yearlyPM25 = [];
 
-                    // 2. 準備圖表數據 (範例使用 4 月份趨勢，實際將依據 CSV 內容渲染)
-                    // 註：因為月值檔只有單月平均，這裡我們模擬 4/1-4/15 趨勢
-                    renderMainChart();
+        try {
+            // 2. 使用迴圈讀取所有月份 CSV
+            for (let m of DATA_CONFIG.months) {
+                const fileName = `空氣品質監測月值 (2025-${m}).csv`;
+                const response = await fetch(fileName);
+                
+                if (!response.ok) {
+                    console.warn(`跳過不存在的檔案: ${fileName}`);
+                    continue;
                 }
-            });
+
+                const csvText = await response.text();
+                
+                // 使用 Promise 包裝 Papa.parse 以確保讀取完才進下一個月
+                const results = await new Promise(resolve => {
+                    Papa.parse(csvText, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: resolve
+                    });
+                });
+
+                // 3. 過濾出大甲站
+                const record = results.data.find(row => 
+                    row.sitename === DATA_CONFIG.targetSite && 
+                    (row.itemname === DATA_CONFIG.targetItem || row.itemengname === 'PM2.5')
+                );
+
+                if (record) {
+                    yearlyLabels.push(`${m}月`);
+                    yearlyPM25.push(parseFloat(record.concentration));
+                }
+            }
+
+            // 4. 將抓到的真實數據傳給圖表
+            renderMainChart(yearlyLabels, yearlyPM25);
+
         } catch (error) {
             console.error("初始化失敗:", error);
-            // 若檔案讀取失敗，仍渲染圖表顯示摘要數據
-            renderMainChart();
         }
     }
 
-    function renderMainChart() {
+    // 5. 修改後的繪圖函式，接收 Labels 和 Data
+    function renderMainChart(labels, pm25Data) {
         const ctx = document.getElementById('mainChart').getContext('2d');
         
+        // 設定顏色：4月設為紅色，其他設為藍色
+        const colors = labels.map(l => l.includes('04') ? '#d32f2f' : 'rgba(54, 162, 235, 0.6)');
+
         new Chart(ctx, {
+            type: 'bar', // 改成 Bar 圖更適合看月份對比
             data: {
-                labels: ['4/1', '4/3', '4/4(起駕)', '4/6', '4/8(祝壽)', '4/10', '4/13(回鑾)', '4/15'],
+                labels: labels,
                 datasets: [
                     {
-                        type: 'line',
-                        label: 'PM2.5 濃度 (μg/m³)',
-                        data: [22, 25, 28, 32, 38, 20, 27, 24], // 這裡的 20 模擬下雨後的下降
-                        borderColor: '#d32f2f',
-                        backgroundColor: 'rgba(211, 47, 47, 0.1)',
-                        borderWidth: 3,
-                        yAxisID: 'y',
-                        fill: true,
-                        tension: 0.3
-                    },
-                    {
-                        type: 'bar',
-                        label: '降雨量 (mm)',
-                        data: [0, 0, 0, 0, 0, 15, 0, 0], // 模擬 4/10 下雨
-                        backgroundColor: 'rgba(33, 150, 243, 0.5)',
-                        yAxisID: 'y1',
-                        barThickness: 30
+                        label: '真實 PM2.5 月平均濃度 (μg/m³)',
+                        data: pm25Data,
+                        backgroundColor: colors,
+                        borderColor: '#333',
+                        borderWidth: 1,
+                        yAxisID: 'y'
                     }
                 ]
             },
@@ -152,23 +165,16 @@
                 maintainAspectRatio: false,
                 scales: {
                     y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: { display: true, text: 'PM2.5 (μg/m³)' },
-                        suggestedMax: 50
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: { display: true, text: '降雨量 (mm)' },
-                        grid: { drawOnChartArea: false },
-                        suggestedMax: 40
+                        beginAtZero: true,
+                        title: { display: true, text: 'PM2.5 濃度' }
                     }
                 },
                 plugins: {
-                    legend: { position: 'top' }
+                    title: {
+                        display: true,
+                        text: `2025年 ${DATA_CONFIG.targetSite}站 全年度趨勢 (紅色為遶境月)`,
+                        font: { size: 18 }
+                    }
                 }
             }
         });
