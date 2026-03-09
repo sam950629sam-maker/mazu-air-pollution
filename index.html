@@ -87,67 +87,63 @@
 <script>
     const DATA_CONFIG = {
         months: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'],
-        targetSite: '大甲',
-        targetItem: 'PM2.5'
+        // 建立中英文對照表
+        siteNames: ['大甲', 'Dajia'],
+        itemNames: ['細懸浮微粒', 'PM2.5']
     };
 
     async function initDashboard() {
         let yearlyLabels = [];
         let yearlyPM25 = [];
-        console.log("🚀 程式開始啟動...");
+        console.log("🚀 開始全自動掃描 1-10 月資料...");
 
         try {
             for (let m of DATA_CONFIG.months) {
+                // 處理檔名空格問題
                 const fileName = `空氣品質監測月值 (2025-${m}).csv`;
-                const response = await fetch(fileName);
+                const response = await fetch(encodeURIComponent(fileName));
                 
                 if (!response.ok) {
-                    console.error(`❌ 無法讀取檔案: ${fileName}`);
+                    console.error(`❌ 找不到檔案: ${fileName}`);
                     continue;
                 }
 
-                // 處理可能存在的 Big5 或 BOM 編碼問題
-                const arrayBuffer = await response.arrayBuffer();
-                const decoder = new TextDecoder('utf-8'); // 如果是 Big5 請改為 'big5'
-                const csvText = decoder.decode(arrayBuffer).replace(/^\uFEFF/, ""); 
+                const csvText = await response.text();
+                const results = Papa.parse(csvText, { header: true, skipEmptyLines: true });
 
-                const results = Papa.parse(csvText, { 
-                    header: true, 
-                    skipEmptyLines: true 
-                });
-
-                // 檢查第一行資料長什麼樣子 (除錯用)
-                if (m === '01') console.log("第一行範例資料:", results.data[0]);
-
-                // 萬用匹配邏輯：搜尋整行文字
+                // --- 核心過濾邏輯：中英雙拼 ---
                 const record = results.data.find(row => {
-                    const rowString = JSON.stringify(row);
-                    return rowString.includes(DATA_CONFIG.targetSite) && 
-                           (rowString.includes(DATA_CONFIG.targetItem) || rowString.includes("細懸浮微粒"));
+                    const sName = (row.sitename || "").trim();
+                    const iName = (row.itemname || "").trim();
+                    const iEng = (row.itemengname || "").trim();
+
+                    // 只要站名符合 (大甲/Dajia) 且 項目符合 (細懸浮微粒/PM2.5)
+                    const isTargetSite = DATA_CONFIG.siteNames.includes(sName);
+                    const isPM25 = DATA_CONFIG.itemNames.includes(iName) || DATA_CONFIG.itemNames.includes(iEng);
+                    
+                    return isTargetSite && isPM25;
                 });
 
                 if (record) {
-                    // 找出數值 (抓取 concentration 或最後一個有效的數字)
-                    const val = parseFloat(record.concentration || record.Concentration);
+                    const val = parseFloat(record.concentration);
                     if (!isNaN(val)) {
-                        console.log(`✅ ${m}月 成功:`, val);
+                        console.log(`✅ ${m}月 成功抓取 (${sName}): ${val}`);
                         yearlyLabels.push(`${m}月`);
                         yearlyPM25.push(val);
                     }
                 } else {
-                    console.warn(`⚠️ ${m}月 檔案中找不到包含 "${DATA_CONFIG.targetSite}" 的資料`);
+                    console.warn(`⚠️ ${m}月 檔案內找不到符合條件的行 (檢查中英對照)`);
                 }
             }
 
             if (yearlyPM25.length > 0) {
                 renderMainChart(yearlyLabels, yearlyPM25);
             } else {
-                document.getElementById('mainChart').parentElement.innerHTML = 
-                    "<h3 style='color:red; text-align:center;'>資料讀取失敗：請檢查 CSV 檔案編碼是否為 UTF-8</h3>";
+                alert("數據讀取失敗！請確認 CSV 檔案是否已正確上傳至 GitHub。");
             }
 
         } catch (error) {
-            console.error("🔥 執行過程中發生錯誤:", error);
+            console.error("🔥 執行錯誤:", error);
         }
     }
 
@@ -160,7 +156,7 @@
             data: {
                 labels: labels,
                 datasets: [{
-                    label: '大甲站 PM2.5 濃度 (μg/m³)',
+                    label: 'PM2.5 濃度 (μg/m³)',
                     data: pm25Data,
                     backgroundColor: colors,
                     borderColor: '#333',
@@ -171,7 +167,7 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    title: { display: true, text: '2025年 大甲站年度數據監測', font: { size: 18 } }
+                    title: { display: true, text: '2025年 大甲站年度數據監測 (自動中英匹配)', font: { size: 18 } }
                 }
             }
         });
