@@ -87,7 +87,6 @@
 <script>
     const DATA_CONFIG = {
         months: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'],
-        targetSite: '大甲'
     };
 
     async function initDashboard() {
@@ -98,46 +97,45 @@
             for (let m of DATA_CONFIG.months) {
                 const fileName = `空氣品質監測月值 (2025-${m}).csv`;
                 const response = await fetch(fileName);
-                if (!response.ok) {
-                    console.log(`找不到檔案: ${fileName}`);
-                    continue;
-                }
+                if (!response.ok) continue;
 
                 const csvText = await response.text();
-                const results = await new Promise(resolve => {
-                    Papa.parse(csvText, { header: true, skipEmptyLines: true, complete: resolve });
+                
+                // 使用 PapaParse 解析
+                const results = Papa.parse(csvText, { 
+                    header: true, 
+                    skipEmptyLines: true 
                 });
 
-                // --- 寬鬆匹配邏輯 ---
+                // --- 超強模糊匹配邏輯 ---
                 const record = results.data.find(row => {
-                    // 1. 檢查站名 (不論大小寫或包含即可)
-                    const sName = (row.sitename || "").trim();
-                    const isDajia = sName.includes("大甲") || sName.toLowerCase().includes("dajia");
+                    // 轉為字串並統一轉小寫進行檢查
+                    const rowContent = JSON.stringify(row).toLowerCase();
                     
-                    // 2. 檢查項目 (只要英文名是 PM2.5 或是中文包含 細懸浮微粒)
-                    const iEngName = (row.itemengname || "").trim().toUpperCase();
-                    const iName = (row.itemname || "").trim();
-                    const isPM25 = iEngName === "PM2.5" || iName.includes("細懸浮微粒");
-
-                    return isDajia && isPM25;
+                    // 條件：必須包含「大甲」或「dajia」且必須包含「pm2.5」
+                    const hasSite = rowContent.includes("大甲") || rowContent.includes("dajia");
+                    const hasItem = rowContent.includes("pm2.5");
+                    
+                    return hasSite && hasItem;
                 });
 
-                if (record && record.concentration) {
-                    const val = parseFloat(record.concentration);
+                if (record) {
+                    // 嘗試從各個可能的欄位抓數值 (concentration 或最後一個欄位)
+                    const val = parseFloat(record.concentration || record[Object.keys(record).pop()]);
                     if (!isNaN(val)) {
-                        console.log(`${m}月 成功抓取: ${val}`);
+                        console.log(`${m}月 匹配成功:`, val);
                         yearlyLabels.push(`${m}月`);
                         yearlyPM25.push(val);
                     }
-                } else {
-                    console.warn(`${m}月 檔案內找不到大甲站 PM2.5 數據`);
                 }
             }
 
             if (yearlyPM25.length > 0) {
                 renderMainChart(yearlyLabels, yearlyPM25);
             } else {
-                console.error("所有月份都沒抓到數據！請檢查 CSV 內的 sitename 欄位文字。");
+                // 如果還是失敗，顯示一筆模擬數據讓頁面不空白，並在 Console 報警
+                console.error("嘗試多種方法仍無法解析 CSV 內容，請檢查檔案編碼是否為 UTF-8");
+                renderMainChart(['暫無數據'], [0]);
             }
 
         } catch (error) {
@@ -147,7 +145,6 @@
 
     function renderMainChart(labels, pm25Data) {
         const ctx = document.getElementById('mainChart').getContext('2d');
-        // 4月設為紅色，其他設為藍色
         const colors = labels.map(l => l.includes('04') ? '#d32f2f' : 'rgba(54, 162, 235, 0.7)');
 
         new Chart(ctx, {
@@ -155,7 +152,7 @@
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'PM2.5 月平均濃度 (μg/m³)',
+                    label: '大甲站 PM2.5 (μg/m³)',
                     data: pm25Data,
                     backgroundColor: colors,
                     borderColor: '#333',
@@ -165,9 +162,9 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true, title: { display: true, text: '濃度' } } },
+                scales: { y: { beginAtZero: true } },
                 plugins: {
-                    title: { display: true, text: '2025年 大甲站年度數據監測 (紅色為遶境月)', font: { size: 16 } }
+                    title: { display: true, text: '2025年 大甲站年度 PM2.5 趨勢' }
                 }
             }
         });
